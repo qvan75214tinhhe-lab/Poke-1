@@ -14,15 +14,22 @@ jobs:
 
       - name: Xác định thư mục project
         run: |
-          if [ -f settings.gradle ] || [ -f settings.gradle.kts ]; then
-            echo "PROJECT_DIR=." >> "$GITHUB_ENV"
-          else
-            # Repo chỉ chứa file zip -> giải nén
-            ZIP=$(ls PokeMMO_Bot_AutoWalk*_source.zip 2>/dev/null | head -n1)
-            [ -n "$ZIP" ] || { echo "Không tìm thấy project hoặc file zip"; exit 1; }
+          find_settings() { find "$1" \( -name settings.gradle -o -name settings.gradle.kts \) -not -path '*/.git/*' | head -n1; }
+          SETTINGS=$(find_settings .)
+          if [ -z "$SETTINGS" ]; then
+            ZIP=$(find . -iname '*.zip' -not -path './.git/*' | head -n1)
+            if [ -z "$ZIP" ]; then
+              echo "Không thấy project hoặc file zip. Các file trong repo:"
+              find . -not -path './.git/*' | head -50
+              exit 1
+            fi
+            echo "Giải nén: $ZIP"
             unzip -q "$ZIP" -d src
-            echo "PROJECT_DIR=src" >> "$GITHUB_ENV"
+            SETTINGS=$(find_settings src)
           fi
+          [ -n "$SETTINGS" ] || { echo "Không tìm thấy settings.gradle"; find . -not -path './.git/*' | head -50; exit 1; }
+          echo "PROJECT_DIR=$(dirname "$SETTINGS")" >> "$GITHUB_ENV"
+          echo "Project: $(dirname "$SETTINGS")"
 
       - uses: actions/setup-java@v4
         with:
@@ -45,4 +52,3 @@ jobs:
           name: PokeMMO-Bot-debug-apk
           path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
-          
